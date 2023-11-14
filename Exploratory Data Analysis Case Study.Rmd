@@ -10,10 +10,13 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=10)
 library(tidyverse)
 library(scales)
 library(lmPerm)
-knitr::opts_chunk$set(fig.width=10)
+library(mice)
+library(naniar)
+library(skimr)
 BlackFriday = read_csv("BlackFriday_data.csv", show_col_types = FALSE)
 BlackFriday
 ```
@@ -58,22 +61,119 @@ summarize_character(BlackFriday)
 ```{r}
 summarize_numeric(BlackFriday)
 ```
+
+### Missing Value Treatment
+
+```{r}
+
+# Calculate the percentage of missing values
+missing_values <- sapply(BlackFriday, function(x) sum(is.na(x)))
+missing_values_percentage <- sapply(BlackFriday, function(x) mean(is.na(x)) * 100)
+
+# Create a dataframe to save the missing values
+missing_values_info <- data.frame(
+  Variable = names(missing_values),
+  MissingValues = missing_values,
+  Percentage = missing_values_percentage
+)
+
+# Filter Missing Values
+missing_values_info <- missing_values_info[missing_values_info$MissingValues > 0,]
+
+# visualization of Missing Values in Each Column
+ggplot(missing_values_info, aes(x = Variable, y = Percentage)) +
+  geom_bar(stat = "identity", fill = "gray") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Percentage of Missing Values in Each Column",
+       x = "Columns",
+       y = "Percentage (%)")
+
+```
+
+Visualization indicates a small proportion of missing value (less than 0.2%). This indicates a random distribution of the missing values. MCAR test was performed to validate the randomness of variables.
+
+```{r}
+result <- mcar_test(BlackFriday)
+print(result)
+```
+
+```{r}
+data_clean <- na.omit(BlackFriday$Purchase)
+
+# Create a histogram with a density plot
+ggplot(data.frame(Purchase=data_clean), aes(x=Purchase)) + 
+    geom_histogram(aes(y=..density..), bins=30, fill="blue", alpha=0.7) +
+    geom_density(colour="red", alpha=0.7) +
+    theme_minimal() +
+    labs(title="Distribution of Purchase", x="Purchase Amount", y="Density")
+```
+
+Missing Product_ID and Customer_ID will be dropped. The missing outcome variable Purchase will be replaced by the median due to the left-skewed distribution. For other categorical variable, they will be replaced by the modes.
+
+```{r}
+
+get_mode <- function(v) {
+  uniqv <- unique(na.omit(v))
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+# Impute categorical variables with mode
+categorical_columns <- c("Gender", "Age", "Occupation", "City_Category", "Stay_In_Current_City_Years", "Marital_Status", "Product_Category_1", "Product_Category_2", "Product_Category_3")
+for (col in categorical_columns) {
+  mode_value <- get_mode(BlackFriday[[col]])
+  BlackFriday[[col]][is.na(BlackFriday[[col]])] <- mode_value
+}
+
+
+# Impute 'Purchase' with median
+BlackFriday_cleaned <- BlackFriday
+
+median_purchase <- median(BlackFriday_cleaned$Purchase, na.rm = TRUE)
+BlackFriday$Purchase[is.na(BlackFriday_cleaned$Purchase)] <- median_purchase
+
+# Drop rows with missing 'User_ID' or 'Product_ID'
+BlackFriday_cleaned <- BlackFriday_cleaned[!is.na(BlackFriday_cleaned$User_ID) & !is.na(BlackFriday_cleaned$Product_ID), ]
+
+```
+
+```{r}
+
+boxplot(BlackFriday_cleaned$Purchase,width = 0.2,main="Boxplot of Purchase",na.rm = "True")
+
+Q1 <- quantile(BlackFriday_cleaned$Purchase, 0.25,na.rm = "True")
+Q3 <- quantile(BlackFriday_cleaned$Purchase, 0.75,na.rm = "True")
+IQR <- Q3 - Q1
+lower_bound <- Q1 - 1.5 * IQR
+upper_bound <- Q3 + 1.5 * IQR
+outliers <- BlackFriday_cleaned$Purchase[BlackFriday_cleaned$Purchase < lower_bound | BlackFriday_cleaned$Purchase > upper_bound]
+
+```
+
+```{r}
+
+z_scores <- scale(BlackFriday$Purchase)
+
+z_scores[z_scores > 3] # Check Outliers
+
+
+```
+
 ##  Initial Data Review
 
 ### Convert Factors/Measures
 
 ```{r}
-BlackFriday <- BlackFriday %>% mutate(User_ID = as.factor(User_ID))
-BlackFriday <- BlackFriday %>% mutate(Occupation = as.factor(Occupation))
-BlackFriday <- BlackFriday %>% mutate(Stay_In_Current_City_Years = as.factor(Stay_In_Current_City_Years))
-BlackFriday <- BlackFriday %>% mutate(Marital_Status = as.factor(Marital_Status))
-BlackFriday <- BlackFriday %>% mutate(Product_Category_1 = as.factor(Product_Category_1))
-BlackFriday <- BlackFriday %>% mutate(Product_Category_2 = as.factor(Product_Category_2))
-BlackFriday <- BlackFriday %>% mutate(Product_Category_3 = as.factor(Product_Category_3))
-BlackFriday <- BlackFriday %>% mutate(Product_ID = as.factor(Product_ID))
-BlackFriday <- BlackFriday %>% mutate(Gender = as.factor(Gender))
-BlackFriday <- BlackFriday %>% mutate(Age = as.factor(Age))
-BlackFriday <- BlackFriday %>% mutate(City_Category = as.factor(City_Category))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(User_ID = as.factor(User_ID))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Occupation = as.factor(Occupation))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Stay_In_Current_City_Years = as.factor(Stay_In_Current_City_Years))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Marital_Status = as.factor(Marital_Status))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Product_Category_1 = as.factor(Product_Category_1))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Product_Category_2 = as.factor(Product_Category_2))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Product_Category_3 = as.factor(Product_Category_3))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Product_ID = as.factor(Product_ID))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Gender = as.factor(Gender))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(Age = as.factor(Age))
+BlackFriday_cleaned <- BlackFriday_cleaned %>% mutate(City_Category = as.factor(City_Category))
 ```
 
 ```{r}
@@ -90,12 +190,27 @@ summarize_factor = function(dataset) {
   summary.table
 }
 
-summarize_factor(BlackFriday)
+summarize_factor(BlackFriday_cleaned)
 ```
 
 ```{r}
-BlackFriday_cleaned <- na.omit(BlackFriday)
-BlackFriday_cleaned
+summarize_factor = function(dataset) {
+  
+  dataset = select_if(dataset, is.factor)
+  summary.table = data.frame(Attribute = names(dataset))
+  
+  summary.table = summary.table %>% 
+    mutate('Missing Values' = apply(dataset, 2, function (x) sum(is.na(x))),
+           'Unique Values' = apply(dataset, 2, function (x) length(unique(x))),
+           'Mode' = apply(dataset, 2, function(x)mode(x))
+    )
+  summary.table
+}
+
+summarize_factor(BlackFriday_cleaned)
+```
+
+```{r}
 
 User_data <- BlackFriday_cleaned %>%
   select(User_ID, Gender, Age, Occupation, City_Category, Stay_In_Current_City_Years, Marital_Status, Purchase)
@@ -130,7 +245,6 @@ cleaned_Product_data <- Product_data %>%
 write.csv(cleaned_Product_data, file = "cleaned_Product.csv", row.names = FALSE)
 write.csv(cleaned_User_data, file = "cleaned_User.csv", row.names = FALSE)
 
-cleaned_Product_data
 ```
 
 ```{r}
