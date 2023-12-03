@@ -9,21 +9,29 @@ output:
 ---
 
 ```{r setup, include=FALSE}
+
+# package loading 
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_chunk$set(fig.width=10)
 library(tidyverse)
+library(gridExtra)
+library(skimr)
+library(grid)
 library(scales)
-library(lmPerm)
 library(mice)
 library(naniar)
-library(skimr)
+
+# adjust size of figure
+knitr::opts_chunk$set(fig.width=10)
+
+# reading file
 BlackFriday = read_csv("BlackFriday_data.csv", show_col_types = FALSE)
-BlackFriday
 ```
 
 ##  Utility functions
 
 ```{r}
+
+# define function to display Missing value, Unique values, Mean, Min, Max and SD
 summarize_numeric = function(dataset) {
   
   dataset = select_if(dataset, is.numeric)
@@ -40,6 +48,7 @@ summarize_numeric = function(dataset) {
   summary.table
 }
 
+# for character columns, calculate missing values and unique values
 summarize_character = function(dataset) {
   
   dataset = select_if(dataset, is.character)
@@ -57,7 +66,6 @@ summarize_character = function(dataset) {
 summarize_character(BlackFriday)
 ```
 
-
 ```{r}
 summarize_numeric(BlackFriday)
 ```
@@ -66,11 +74,11 @@ summarize_numeric(BlackFriday)
 
 ```{r}
 
-# Calculate the percentage of missing values
+# Calculate the percentage of missing variabels
 missing_values <- sapply(BlackFriday, function(x) sum(is.na(x)))
 missing_values_percentage <- sapply(BlackFriday, function(x) mean(is.na(x)) * 100)
 
-# Create a dataframe to save the missing values
+# Create a dataframe to save the data
 missing_values_info <- data.frame(
   Variable = names(missing_values),
   MissingValues = missing_values,
@@ -80,23 +88,22 @@ missing_values_info <- data.frame(
 # Filter Missing Values
 missing_values_info <- missing_values_info[missing_values_info$MissingValues > 0,]
 
-# visualization of Missing Values in Each Column
+# Visulization of Missing Values in Each Column
 ggplot(missing_values_info, aes(x = Variable, y = Percentage)) +
   geom_bar(stat = "identity", fill = "gray") +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   labs(title = "Percentage of Missing Values in Each Column",
        x = "Columns",
        y = "Percentage (%)")
 
 ```
 
-Visualization indicates a small proportion of missing value (less than 0.2%). This indicates a random distribution of the missing values. MCAR test was performed to validate the randomness of variables.
+MCAR test was performed to validate the randomness of variables.
 
 ```{r}
 result <- mcar_test(BlackFriday)
 print(result)
 ```
-
 ```{r}
 data_clean <- na.omit(BlackFriday$Purchase)
 
@@ -108,7 +115,9 @@ ggplot(data.frame(Purchase=data_clean), aes(x=Purchase)) +
     labs(title="Distribution of Purchase", x="Purchase Amount", y="Density")
 ```
 
-Missing Product_ID and Customer_ID will be dropped. The missing outcome variable Purchase will be replaced by the median due to the left-skewed distribution. For other categorical variable, they will be replaced by the modes.
+The category variables - Mode 
+The continuous variable Purchase - Median due to the left-skewed distribution
+User_id and Product_ID - dropped
 
 ```{r}
 
@@ -118,7 +127,9 @@ get_mode <- function(v) {
 }
 
 # Impute categorical variables with mode
-categorical_columns <- c("Gender", "Age", "Occupation", "City_Category", "Stay_In_Current_City_Years", "Marital_Status", "Product_Category_1", "Product_Category_2", "Product_Category_3")
+categorical_columns <- c("Gender", "Age", "Occupation", "City_Category", 
+                         "Stay_In_Current_City_Years", "Marital_Status", 
+                         "Product_Category_1", "Product_Category_2", "Product_Category_3")
 for (col in categorical_columns) {
   mode_value <- get_mode(BlackFriday[[col]])
   BlackFriday[[col]][is.na(BlackFriday[[col]])] <- mode_value
@@ -127,7 +138,6 @@ for (col in categorical_columns) {
 
 # Impute 'Purchase' with median
 BlackFriday_cleaned <- BlackFriday
-
 median_purchase <- median(BlackFriday_cleaned$Purchase, na.rm = TRUE)
 BlackFriday$Purchase[is.na(BlackFriday_cleaned$Purchase)] <- median_purchase
 
@@ -150,12 +160,8 @@ outliers <- BlackFriday_cleaned$Purchase[BlackFriday_cleaned$Purchase < lower_bo
 ```
 
 ```{r}
-
 z_scores <- scale(BlackFriday$Purchase)
-
-z_scores[z_scores > 3] # Check Outliers
-
-
+z_scores[z_scores > 3]
 ```
 
 ##  Initial Data Review
@@ -189,25 +195,7 @@ summarize_factor = function(dataset) {
     )
   summary.table
 }
-
-summarize_factor(BlackFriday_cleaned)
-```
-
-```{r}
-summarize_factor = function(dataset) {
-  
-  dataset = select_if(dataset, is.factor)
-  summary.table = data.frame(Attribute = names(dataset))
-  
-  summary.table = summary.table %>% 
-    mutate('Missing Values' = apply(dataset, 2, function (x) sum(is.na(x))),
-           'Unique Values' = apply(dataset, 2, function (x) length(unique(x))),
-           'Mode' = apply(dataset, 2, function(x)mode(x))
-    )
-  summary.table
-}
-
-summarize_factor(BlackFriday_cleaned)
+summarize_factor(BlackFriday)
 ```
 
 ```{r}
@@ -242,8 +230,8 @@ cleaned_Product_data <- Product_data %>%
     Num_Purchases = n()  # Number of purchases made by each customer
   )
 
-write.csv(cleaned_Product_data, file = "cleaned_Product.csv", row.names = FALSE)
-write.csv(cleaned_User_data, file = "cleaned_User.csv", row.names = FALSE)
+write.csv(cleaned_Product_data, file = "cleaned_Product1.csv", row.names = FALSE)
+write.csv(cleaned_User_data, file = "cleaned_User1.csv", row.names = FALSE)
 
 ```
 
@@ -252,7 +240,10 @@ options(scipen = 999)
 summarize_character(cleaned_User_data)
 summarize_numeric(cleaned_User_data)
 ```
-
+```{r}
+BlackFriday
+BlackFriday_cleaned
+```
 ```{r}
 options(scipen = 999)
 summarize_character(cleaned_Product_data)
@@ -392,6 +383,9 @@ ggplot(cleaned_Product_data) +
 ```
 
 
+
+
+
 ```{r}
 ggplot(cleaned_Product_data) + 
   geom_bar(aes(x = Product_Category_1), fill = "#efac37") +
@@ -404,8 +398,6 @@ ggplot(cleaned_Product_data) +
     axis.title = element_text(size = 20)
   ) 
 ```
-
-
 
 ```{r}
 ggplot(cleaned_Product_data) + 
@@ -824,12 +816,10 @@ summarize_statistics = function(dataset) {
 summarize_statistics(cleaned_User_data)
 ```
 
-
 ### Sample Statistics for Product Data (Mean)
 ```{r}
 summarize_statistics(cleaned_Product_data)
 ```
-
 
 
 ## Hypothesis Testing for Customer Information
@@ -918,8 +908,6 @@ ggplot(as_tibble(perm_diffs)) + geom_histogram(aes(x=value), fill = "#e8615b") +
   geom_text(aes(x=obs_diff), label="\nObserved Difference", y=100, hjust="left")
 ```
 
-
-
 One-way ANOVA to determine if there are statistically significant differences among the total purchase of different city categories
 
 Classical
@@ -927,6 +915,7 @@ Classical
 ```{r}
 summary(aovp(Total_Purchase ~ Age, data=cleaned_User_data))
 ```
+
 
 Computational
 
@@ -942,6 +931,37 @@ vars <- replicate(10000, {
   cleaned_User_data$Shuffled_Total_Purchase <- shuffled_total_purchase
   # Compute the variance in means for the permuted data
   var(tapply(cleaned_User_data$Shuffled_Total_Purchase, cleaned_User_data$Age, mean))
+})
+
+# Compute p-value
+p_value <- mean(vars >= obs_var)
+p_value
+```
+
+
+One-way ANOVA to determine if there are statistically significant differences among the total purchase of different occupation
+
+Classical
+
+```{r}
+summary(aovp(Total_Purchase ~ Occupation, data=cleaned_User_data))
+```
+
+
+Computational
+
+```{r}
+obs_var <- var(tapply(cleaned_User_data$Total_Purchase, cleaned_User_data$Occupation, mean))
+
+# Permute and compute test statistics
+set.seed(1)
+vars <- replicate(10000, {
+  # Shuffle the bills
+  shuffled_total_purchase <- sample(cleaned_User_data$Total_Purchase)
+  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
+  cleaned_User_data$Shuffled_Total_Purchase <- shuffled_total_purchase
+  # Compute the variance in means for the permuted data
+  var(tapply(cleaned_User_data$Shuffled_Total_Purchase, cleaned_User_data$Occupation, mean))
 })
 
 # Compute p-value
@@ -1009,174 +1029,6 @@ p_value <- mean(vars >= obs_var)
 p_value
 ```
 
-### Num_Purchases
-
-One-tailed hypothesis test to determine if there is a statistically significant difference between the number of purchase of female and male.
-
-Classical
-```{r}
-female <- cleaned_User_data$Num_Purchases[cleaned_User_data$Gender == 'F']
-male <- cleaned_User_data$Num_Purchases[cleaned_User_data$Gender == 'M']
-
-t.test(female, male, alternative = "greater")
-```
-
-
-
-Permutation Testing
-
-
-```{r}
-set.seed(1)
-obs_diff <- mean(female) - mean(male)
-
-perm_diffs <- replicate(10000, {
-  permuted_data <- sample(c(female, male))  
-  new_female <- permuted_data[1:length(female)]  
-  new_male <- permuted_data[(length(male) + 1):length(permuted_data)]
-  mean(new_female) - mean(new_male)
-})
-
-p_value <- mean(perm_diffs >= obs_diff)
-p_value
-```
-
-```{r}
-ggplot(as_tibble(perm_diffs)) + geom_histogram(aes(x=value), fill = "#e8615b") +
-  labs(title = "Check Differences")+
-  geom_vline(xintercept = obs_diff, linetype = "dashed", size = 0.8)+
-  geom_text(aes(x=obs_diff), label="\nObserved Difference", y=100, hjust="left")
-```
-
-
-
-
-
-One-tailed hypothesis test to determine if there is a statistically significant difference between the number of purchase of unmarried customers and married customers.
-
-Classical
-```{r}
-unmarried <- cleaned_User_data$Num_Purchases[cleaned_User_data$Marital_Status == 0]
-married <- cleaned_User_data$Num_Purchases[cleaned_User_data$Marital_Status == 1]
-
-t.test(unmarried, married, alternative = "greater")
-```
-
-Permutation Testing
-
-```{r}
-set.seed(1)
-obs_diff <- mean(unmarried) - mean(married)
-
-perm_diffs <- replicate(10000, {
-  permuted_data <- sample(c(unmarried, married))  
-  new_unmarried <- permuted_data[1:length(unmarried)]  
-  new_married <- permuted_data[(length(married) + 1):length(permuted_data)]
-  mean(new_unmarried) - mean(new_married)
-})
-
-p_value <- mean(perm_diffs >= obs_diff)
-p_value
-```
-
-```{r}
-ggplot(as_tibble(perm_diffs)) + geom_histogram(aes(x=value), fill = "#e8615b") +
-  labs(title = "Check Differences")+
-  geom_vline(xintercept = obs_diff, linetype = "dashed", size = 0.8)+
-  geom_text(aes(x=obs_diff), label="\nObserved Difference", y=100, hjust="left")
-```
-
-One-way ANOVA to determine if there are statistically significant differences among the number of purchase of different city categories
-
-Classical
-
-```{r}
-summary(aovp(Num_Purchases ~ Age, data=cleaned_User_data))
-```
-
-Computational
-
-```{r}
-obs_var <- var(tapply(cleaned_User_data$Num_Purchases, cleaned_User_data$Age, mean))
-
-# Permute and compute test statistics
-set.seed(1)
-vars <- replicate(10000, {
-  # Shuffle the bills
-  shuffled_Num_Purchases <- sample(cleaned_User_data$Num_Purchases)
-  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
-  cleaned_User_data$Shuffled_Num_Purchases <- shuffled_Num_Purchases
-  # Compute the variance in means for the permuted data
-  var(tapply(cleaned_User_data$Shuffled_Num_Purchases, cleaned_User_data$Age, mean))
-})
-
-# Compute p-value
-p_value <- mean(vars >= obs_var)
-p_value
-```
-
-
-One-way ANOVA to determine if there are statistically significant differences among the number of purchase of different age groups
-
-Classical
-
-```{r}
-summary(aovp(Num_Purchases ~ City_Category, data=cleaned_User_data))
-```
-
-
-
-Computational
-
-```{r}
-obs_var <- var(tapply(cleaned_User_data$Num_Purchases, cleaned_User_data$City_Category, mean))
-
-# Permute and compute test statistics
-set.seed(1)
-vars <- replicate(10000, {
-  # Shuffle the bills
-  shuffled_Num_Purchases <- sample(cleaned_User_data$Num_Purchases)
-  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
-  cleaned_User_data$Shuffled_Num_Purchases <- shuffled_Num_Purchases
-  # Compute the variance in means for the permuted data
-  var(tapply(cleaned_User_data$Shuffled_Num_Purchases, cleaned_User_data$City_Category, mean))
-})
-
-# Compute p-value
-p_value <- mean(vars >= obs_var)
-p_value
-```
-
-
-One-way ANOVA to determine if there are statistically significant differences among the number of purchase of different groups with years stay in current city
-
-Classical
-
-```{r}
-summary(aovp(Num_Purchases ~ Stay_In_Current_City_Years, data=cleaned_User_data))
-```
-
-Computational
-
-```{r}
-obs_var <- var(tapply(cleaned_User_data$Num_Purchases, cleaned_User_data$Stay_In_Current_City_Years, mean))
-
-# Permute and compute test statistics
-set.seed(1)
-vars <- replicate(10000, {
-  # Shuffle the bills
-  shuffled_Num_Purchases <- sample(cleaned_User_data$Num_Purchases)
-  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
-  cleaned_User_data$Shuffled_Num_Purchases <- shuffled_Num_Purchases
-  # Compute the variance in means for the permuted data
-  var(tapply(cleaned_User_data$Shuffled_Num_Purchases, cleaned_User_data$Stay_In_Current_City_Years, mean))
-})
-
-# Compute p-value
-p_value <- mean(vars >= obs_var)
-p_value
-```
-
 ## Chi-Squared Test for Independence
 A chi-squared test is used to determine if there is a significant association between two categorical variables. 
 
@@ -1200,9 +1052,6 @@ stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
 
 legend("topright", legend = legend_labels, fill = legend_colors)
 ```
-
-
-
 Gender & Marital_Status
 
 ```{r}
@@ -1223,8 +1072,134 @@ stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
 
 legend("topright", legend = legend_labels, fill = legend_colors)
 ```
+Gender & City_Category
 
+```{r}
+contingency_table <- table(cleaned_User_data$Gender, cleaned_User_data$City_Category)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f")
+legend_labels <- c("Female", "Male")
 
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Female vs Male in Different City Category",
+                             xlab = "City Category", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topleft", legend = legend_labels, fill = legend_colors)
+```
+
+Gender & Stay_In_Current_City_Years
+
+```{r}
+contingency_table <- table(cleaned_User_data$Gender, cleaned_User_data$Stay_In_Current_City_Years)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f")
+legend_labels <- c("Female", "Male")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Female vs Male in Different Year Spent in Current City",
+                             xlab = "Year Spent in Current City", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
+Marital_Status & Age
+```{r}
+contingency_table <- table(cleaned_User_data$Marital_Status, cleaned_User_data$Age)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f")
+legend_labels <- c("0", "1")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Different Marital Status in Different Age Group",
+                             xlab = "Age", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
+Marital_Status & City_Category
+
+```{r}
+contingency_table <- table(cleaned_User_data$Marital_Status, cleaned_User_data$City_Category)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f")
+legend_labels <- c("0", "1")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Different Marital Status in Different City Category",
+                             xlab = "City Category", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
+
+Marital_Status & Stay_In_Current_City_Years
+
+```{r}
+contingency_table <- table(cleaned_User_data$Marital_Status, cleaned_User_data$Stay_In_Current_City_Years)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f")
+legend_labels <- c("0", "1")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Different Marital Status in Different Year Spent in Current City",
+                             xlab = "Year Spent in Current City", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
+
+Age & City Category
+
+```{r}
+contingency_table <- table(cleaned_User_data$City_Category, cleaned_User_data$Age)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f", "#efac37")
+legend_labels <- c("A", "B", "C")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Different Age Group in Different City Category",
+                             xlab = "Age Group", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
+Age & Stay_In_Current_City_Years
+
+```{r}
+contingency_table <- table( cleaned_User_data$Stay_In_Current_City_Years, cleaned_User_data$Age)
+chisq.test(contingency_table)
+```
+```{r}
+contingency_df <- as.matrix(contingency_table)
+legend_colors <- c("#e8615b", "#2f4a7f", "#efac37", "#B5ED12", "#129DED")
+legend_labels <- c("0", "1", "2", "3", "4")
+
+stacked_bar_chart <- barplot(contingency_df, beside = TRUE, col = legend_colors,
+                             main = "Different Age Group in Different Year Spent in Current City",
+                             xlab = "Age Group", ylab = "Frequency",
+                             names.arg = colnames(contingency_df))
+
+legend("topright", legend = legend_labels, fill = legend_colors)
+```
 
 City_Category & Stay_In_Current_City_Years
 
@@ -1248,18 +1223,194 @@ legend("topright", legend = legend_labels, fill = legend_colors)
 ```
 
 
+One-way ANOVA to determine if there are statistically significant differences among the total purchase of different product category 1
+
+Classical
+
+```{r}
+summary(aovp(Total_Purchase ~ Product_Category_1, data=cleaned_Product_data))
+```
+Computational
+
+```{r}
+obs_var <- var(tapply(cleaned_Product_data$Total_Purchase, cleaned_Product_data$Product_Category_1, mean))
+
+# Permute and compute test statistics
+set.seed(1)
+vars <- replicate(10000, {
+  # Shuffle the bills
+  shuffled_Total_Purchase <- sample(cleaned_Product_data$Total_Purchase)
+  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
+  cleaned_Product_data$Shuffled_Total_Purchase <- shuffled_Total_Purchase
+  # Compute the variance in means for the permuted data
+  var(tapply(cleaned_Product_data$Shuffled_Total_Purchase, cleaned_Product_data$Product_Category_1, mean))
+})
+
+# Compute p-value
+p_value <- mean(vars >= obs_var)
+p_value
+```
+
+
+One-way ANOVA to determine if there are statistically significant differences among the total purchase of different product category 2
+
+Classical
+
+```{r}
+summary(aovp(Total_Purchase ~ Product_Category_2, data=cleaned_Product_data))
+```
+
+Computational
+
+```{r}
+obs_var <- var(tapply(cleaned_Product_data$Total_Purchase, cleaned_Product_data$Product_Category_2, mean))
+
+# Permute and compute test statistics
+set.seed(1)
+vars <- replicate(10000, {
+  # Shuffle the bills
+  shuffled_Total_Purchase <- sample(cleaned_Product_data$Total_Purchase)
+  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
+  cleaned_Product_data$Shuffled_Total_Purchase <- shuffled_Total_Purchase
+  # Compute the variance in means for the permuted data
+  var(tapply(cleaned_Product_data$Shuffled_Total_Purchase, cleaned_Product_data$Product_Category_2, mean))
+})
+
+# Compute p-value
+p_value <- mean(vars >= obs_var)
+p_value
+```
+
+
+One-way ANOVA to determine if there are statistically significant differences among the total purchase of different product category 3
+
+Classical
+
+```{r}
+summary(aovp(Total_Purchase ~ Product_Category_3, data=cleaned_Product_data))
+```
+
+
+Computational
+
+```{r}
+obs_var <- var(tapply(cleaned_Product_data$Total_Purchase, cleaned_Product_data$Product_Category_3, mean))
+
+# Permute and compute test statistics
+set.seed(1)
+vars <- replicate(10000, {
+  # Shuffle the bills
+  shuffled_Total_Purchase <- sample(cleaned_Product_data$Total_Purchase)
+  # Assign them back to the original data frame (maintaining sample sizes but ignoring labels)
+  cleaned_Product_data$Shuffled_Total_Purchase <- shuffled_Total_Purchase
+  # Compute the variance in means for the permuted data
+  var(tapply(cleaned_Product_data$Shuffled_Total_Purchase, cleaned_Product_data$Product_Category_3, mean))
+})
+
+# Compute p-value
+p_value <- mean(vars >= obs_var)
+p_value
+```
+
+Product_Category_1 & Product_Category_2
+
+```{r}
+contingency_table <- table(cleaned_Product_data$Product_Category_1, cleaned_Product_data$Product_Category_2)
+chisq.test(contingency_table)
+```
+
+Product_Category_1 & Product_Category_3
+```{r}
+contingency_table <- table(cleaned_Product_data$Product_Category_1, cleaned_Product_data$Product_Category_3)
+chisq.test(contingency_table)
+```
+
+Product_Category_2 & Product_Category_3
+```{r}
+contingency_table <- table(cleaned_Product_data$Product_Category_2, cleaned_Product_data$Product_Category_3)
+chisq.test(contingency_table)
+```
 
 
 
+## Regression Tree Model
+
+```{r}
+library(rpart)
+library(rpart.plot)
+```
+
+### User
+
+```{r}
+# Create the formula for the model
+user_formula <- formula(Total_Purchase ~ Gender + Age + Occupation + City_Category +Stay_In_Current_City_Years + Marital_Status)
+
+# Build the regression tree model
+user_tree <- rpart(user_formula, data = cleaned_User_data,control = rpart.control())
+
+rpart.plot(user_tree)
+
+# Prune the tree using cross-validation
+pruned_tree1 <- prune(user_tree, cp = 0.01)
+options(scipen = 999)
+rpart.plot(pruned_tree1, box.palette = "RdBu", branch.lty = 3, shadow.col = "gray", nn = TRUE,
+           digits = 3,  roundint = TRUE)
+```
 
 
+```{r}
+# For user information
+summary(pruned_tree1)
+```
 
 
+```{r}
+predictions <- predict(pruned_tree1, cleaned_User_data)
+
+# Calculate R-squared
+mean_response <- mean(cleaned_User_data$Total_Purchase)
+ss_total <- sum((cleaned_User_data$Total_Purchase - mean_response)^2)
+ss_residual <- sum((cleaned_User_data$Total_Purchase - predictions)^2)
+rsquared <- 1 - (ss_residual / ss_total)
+rsquared
+```
 
 
+### Product
+
+```{r}
+# Create the formula for the model
+product_formula <- formula(Total_Purchase ~ Product_Category_1 + Product_Category_2 + Product_Category_3)
+
+# Build the regression tree model
+product_tree <- rpart(product_formula, data = cleaned_Product_data,control = rpart.control())
+
+rpart.plot(product_tree)
+
+# Prune the tree using cross-validation
+pruned_tree2 <- prune(product_tree, cp = 0.01)
+options(scipen = 999)
+rpart.plot(pruned_tree2, box.palette = "RdBu", branch.lty = 3, shadow.col = "gray", nn = TRUE,
+           digits = 3,  roundint = TRUE)
+```
 
 
+```{r}
+summary(pruned_tree2)
+```
 
+
+```{r}
+predictions <- predict(pruned_tree2, cleaned_Product_data)
+
+# Calculate R-squared
+mean_response <- mean(cleaned_Product_data$Total_Purchase)
+ss_total <- sum((cleaned_Product_data$Total_Purchase - mean_response)^2)
+ss_residual <- sum((cleaned_Product_data$Total_Purchase - predictions)^2)
+rsquared <- 1 - (ss_residual / ss_total)
+rsquared
+```
 
 
 
